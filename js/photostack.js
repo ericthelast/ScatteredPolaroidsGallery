@@ -96,6 +96,7 @@
   	extend( this.options, options );
  		// index of the current photo
 		this.current = this.options.start;
+  	this._an = new this._autoNavigate(this);
   	this._init();
 		var ps = this;
 
@@ -110,7 +111,42 @@
   		navigate: function(dir) {
   			ps._navigate.call(ps, dir);
   		},
+   		pauseAutoNavigate: function() {
+  			ps._an.stop();
+  		},
+  		resumeAutoNavigate: function() {
+  			ps._an.continue();
+  		}
   	}
+	}
+
+	Photostack.prototype._autoNavigate = function(ps) {
+		var timeout = null;
+
+		var start = function() {
+			ps._navigate( 'next' );
+		}
+
+		var obj = {
+			start: function() {
+				timeout = setTimeout(start, ps.options.autoNavigateChangeDelay);
+			},
+			stop: function() {
+				clearTimeout(timeout);
+			},
+			continue: function() {
+				obj.stop();
+				timeout = setTimeout(start, ps.options.autoNavigateResumeDelay);
+			},
+			mouseenter: function(e) {
+				obj.stop();
+			},
+			mouseleave: function(e) {
+				obj.continue();
+			}
+		}
+
+		return obj;
 	}
 
 	Photostack.prototype.options = {
@@ -119,6 +155,9 @@
 		afterInit: null,
 		afterShowPhoto: null,
 		afterNavigate: null,
+		autoNavigate: false,
+		autoNavigateChangeDelay: 3000,
+		autoNavigateResumeDelay: 1000,
 	};
 
 	Photostack.prototype._init = function() {
@@ -130,6 +169,10 @@
 		this._initEvents();
 		if(this.options.afterInit) {
 			this.options.afterInit(this);
+		}
+
+		if(this.options.autoNavigate) {
+			this._an.start();
 		}
 	}
 
@@ -198,6 +241,11 @@
 						}
 					}
 				} );
+
+				if(self.options.autoNavigate) {
+					dot.addEventListener( 'mouseover', self._an.mouseenter);
+					dot.addEventListener( 'mouseout', self._an.mouseleave);
+				}
 			} );
 		}
 
@@ -228,10 +276,14 @@
 	}
 
 	Photostack.prototype._showPhoto = function( pos ) {
+		var self = this;
 		if( this.isShuffling ) {
 			return false;
 		}
 		this.isShuffling = true;
+
+		self.currentItem.removeEventListener( 'mouseenter', self._an.mouseenter);
+		self.currentItem.removeEventListener( 'mouseleave', self._an.mouseleave);
 
 		// if there is something behind..
 		if( classie.hasClass( this.currentItem, 'photostack-flip' ) ) {
@@ -264,6 +316,12 @@
 
 		if(this.options.afterShowPhoto) {
 			this.options.afterShowPhoto(this);
+		}
+
+		if(self.options.autoNavigate) {
+			self.currentItem.addEventListener( 'mouseenter', self._an.mouseenter);
+			self.currentItem.addEventListener( 'mouseleave', self._an.mouseleave);
+			self._an.start();
 		}
 	}
 
